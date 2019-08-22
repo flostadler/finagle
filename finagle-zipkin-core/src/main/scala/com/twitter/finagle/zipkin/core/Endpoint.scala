@@ -1,15 +1,16 @@
 package com.twitter.finagle.zipkin.core
 
 import com.twitter.finagle.thrift.thrift
-import java.net.{InetAddress, InetSocketAddress, SocketAddress}
+import java.net.{Inet4Address, Inet6Address, InetAddress, InetSocketAddress, SocketAddress}
 import java.nio.ByteBuffer
+
 import scala.util.control.NonFatal
 
 /**
  * Endpoints describe a TCP endpoint that terminates RPC
  * communication.
  */
-case class Endpoint(ipv4: Int, port: Short) {
+case class Endpoint(ipv4: Int, port: Short, ipv6: Array[Byte] = null) {
 
   /**
    * @return If this endpoint's ip is 0.0.0.0 or 127.0.0.1 we get the local host and return that.
@@ -22,6 +23,7 @@ case class Endpoint(ipv4: Int, port: Short) {
     val e = new thrift.Endpoint
     e.setIpv4(ipv4)
     e.setPort(port)
+    e.setIpv6(ipv6)
     e
   }
 }
@@ -41,12 +43,21 @@ object Endpoint {
   }
 
   /**
-   * Returns `0` if `inetAddress` is null, which will be the
+   * Returns `0` if `inetAddress` is an IPv6 address or is null, which will be the
    * case for unresolved `InetSocketAddress`-es.
    */
   def toIpv4(inetAddress: InetAddress): Int = {
-    if (inetAddress == null) 0
+    if (inetAddress == null || inetAddress.isInstanceOf[Inet6Address]) 0
     else ByteBuffer.wrap(inetAddress.getAddress).getInt
+  }
+
+  /**
+   * Returns null if `inetAddress` is an IPv4 address or is null, which will be the
+   * * case for unresolved `InetSocketAddress`-es.
+   */
+  def toIpv6(inetAddress: InetAddress): Array[Byte] = {
+    if (inetAddress == null || inetAddress.isInstanceOf[Inet4Address]) null
+    else inetAddress.getAddress
   }
 
   /**
@@ -61,7 +72,7 @@ object Endpoint {
   def fromSocketAddress(socketAddress: SocketAddress): Endpoint = {
     socketAddress match {
       case inet: InetSocketAddress =>
-        Endpoint(toIpv4(inet.getAddress), inet.getPort.toShort)
+        Endpoint(toIpv4(inet.getAddress), inet.getPort.toShort, toIpv6(inet.getAddress))
       case _ => Endpoint.Unknown
     }
   }
